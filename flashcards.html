@@ -1,191 +1,213 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ghar-Flashcard Mode</title>
- 
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  </head>
- 
-  <body>
-    <div id="root"></div>
- 
-    <script type="text/babel">
-      const { useState, useMemo, useRef, useEffect } = React;
- 
-      const INITIAL_DECK = [
-        { id: 1, hindi: "नमस्ते", roman: "namaste", english: "hello / greetings" },
-        { id: 2, hindi: "धन्यवाद", roman: "dhanyavaad", english: "thank you" },
-        { id: 3, hindi: "पानी", roman: "paani", english: "water" },
-        { id: 4, hindi: "किताब", roman: "kitaab", english: "book" },
-        { id: 5, hindi: "दोस्त", roman: "dost", english: "friend" },
-        { id: 6, hindi: "खाना", roman: "khaana", english: "food" },
-        { id: 7, hindi: "घर", roman: "ghar", english: "home" },
-        { id: 8, hindi: "प्यार", roman: "pyaar", english: "love" },
-      ];
- 
-      const withSchedule = (deck) =>
-        deck.map((c) => ({ ...c, reps: 0, ease: 2.5, interval: 0 }));
- 
-      function reschedule(card, rating) {
-        let { ease, interval, reps } = card;
-        switch (rating) {
-          case "again":
-            ease = Math.max(1.3, ease - 0.2);
-            interval = 0;
-            reps = 0;
-            break;
-          case "hard":
-            ease = Math.max(1.3, ease - 0.15);
-            interval = Math.max(1, Math.round(interval * 1.2));
-            reps += 1;
-            break;
-          case "good":
-            interval = reps === 0 ? 1 : Math.round(interval * ease) || 1;
-            reps += 1;
-            break;
-          case "easy":
-            ease = ease + 0.15;
-            interval = Math.round((interval || 1) * ease * 1.3);
-            reps += 1;
-            break;
-          default:
-            break;
-        }
-        return { ...card, ease, interval, reps };
-      }
- 
-      const PALETTE = {
-        paper: "#FBF7F0",
-        ink: "#1B2A4A",
-        marigold: "#E8920C",
-        vermillion: "#C1352B",
-        muted: "#6B6456",
-      };
-      const DEVANAGARI = "'Noto Sans Devanagari', 'Mangal', system-ui, sans-serif";
- 
-      function HindiFlashcards() {
-        const [deck, setDeck] = useState(() => withSchedule(INITIAL_DECK));
-        const [index, setIndex] = useState(0);
-        const [revealed, setRevealed] = useState(false);
- 
-        const card = deck[index];
-        const learned = useMemo(() => deck.filter((c) => c.reps > 0).length, [deck]);
- 
-        const voiceRef = useRef(null);
-        useEffect(() => {
-          const pickVoice = () => {
-            const voices = window.speechSynthesis?.getVoices() || [];
-            voiceRef.current =
-              voices.find((v) => v.lang === "hi-IN") ||
-              voices.find((v) => v.lang.startsWith("hi")) ||
-              null;
-          };
-          pickVoice();
-          window.speechSynthesis?.addEventListener("voiceschanged", pickVoice);
-          return () =>
-            window.speechSynthesis?.removeEventListener("voiceschanged", pickVoice);
-        }, []);
- 
-        const speak = (text) => {
-          if (!window.speechSynthesis) return;
-          const utter = new SpeechSynthesisUtterance(text);
-          utter.lang = "hi-IN";
-          if (voiceRef.current) utter.voice = voiceRef.current;
-          utter.rate = 0.85;
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(utter);
-        };
- 
-        const rate = (rating) => {
-          setDeck((prev) =>
-            prev.map((c) => (c.id === card.id ? reschedule(c, rating) : c))
-          );
-          setRevealed(false);
-          setIndex((i) => (i + 1) % deck.length);
-        };
- 
-        return (
-          <div
-            style={{ background: PALETTE.paper, color: PALETTE.ink, fontFamily: "Georgia, serif", minHeight: "100vh" }}
-            className="w-full flex flex-col items-center p-6"
-          >
-            <div className="w-full max-w-md">
-              <a
-                href="index.html"
-                style={{ color: PALETTE.muted, textDecoration: "none", fontSize: 14, fontWeight: 500 }}
-              >
-                ← Back to Ghar
-              </a>
-              <p className="text-xs tracking-widest uppercase mt-4" style={{ color: PALETTE.muted }}>
-                Spaced repetition
-              </p>
-              <h1 className="text-2xl font-bold mt-1" style={{ fontFamily: DEVANAGARI }}>
-                हिंदी अभ्यास
-              </h1>
-              <div style={{ height: 3, background: PALETTE.ink }} className="mt-2 rounded-full" />
-              <div className="mt-3 flex items-center justify-between text-sm" style={{ color: PALETTE.muted }}>
-                <span>{learned} / {deck.length} seen</span>
-                <span>ease {card.ease.toFixed(2)} · next ~{card.interval}d</span>
-              </div>
-            </div>
- 
-            <div
-              onClick={() => setRevealed(true)}
-              className="w-full max-w-md mt-6 rounded-2xl p-8 flex flex-col items-center cursor-pointer select-none"
-              style={{ background: "#fff", boxShadow: "0 6px 24px rgba(27,42,74,0.10)", minHeight: 260 }}
-            >
-              <div className="flex items-center gap-3">
-                <span style={{ fontFamily: DEVANAGARI, fontSize: 64, lineHeight: 1 }}>{card.hindi}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); speak(card.hindi); }}
-                  aria-label="Play pronunciation"
-                  className="rounded-full px-3 py-2 text-sm"
-                  style={{ background: PALETTE.marigold, color: "#fff" }}
-                >
-                  ▶ Listen
-                </button>
-              </div>
- 
-              {revealed ? (
-                <div className="mt-6 text-center">
-                  <p className="text-lg italic" style={{ color: PALETTE.vermillion }}>{card.roman}</p>
-                  <p className="text-xl mt-1">{card.english}</p>
-                </div>
-              ) : (
-                <p className="mt-8 text-sm" style={{ color: PALETTE.muted }}>Tap the card to reveal</p>
-              )}
-            </div>
- 
-            {revealed && (
-              <div className="w-full max-w-md mt-5 grid grid-cols-4 gap-2">
-                {[
-                  ["again", "Again", PALETTE.vermillion],
-                  ["hard", "Hard", PALETTE.muted],
-                  ["good", "Good", PALETTE.ink],
-                  ["easy", "Easy", PALETTE.marigold],
-                ].map(([key, label, color]) => (
-                  <button
-                    key={key}
-                    onClick={() => rate(key)}
-                    className="rounded-xl py-3 text-sm font-medium"
-                    style={{ background: color, color: "#fff" }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      }
- 
-      ReactDOM.createRoot(document.getElementById("root")).render(<HindiFlashcards />);
-    </script>
-  </body>
-</html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ghar — Flashcards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-0: #14101f; --bg-1: #241640;
+      --card: #211736; --card-2: #2c1f4d;
+      --ink: #f6f1ff; --ink-dim: #a99ec9;
+      --cyan: #2ee6d6; --gold: #ffd23f;
+      --marigold: #E8920C; --vermillion: #C1352B;
+      --muted: #6B6456;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Fredoka', system-ui, sans-serif;
+      background: radial-gradient(120% 120% at 50% 0%, var(--bg-1) 0%, var(--bg-0) 60%);
+      color: var(--ink);
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
 
+    header {
+      width: 100%; max-width: 560px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 18px 22px;
+    }
+    .back {
+      font-size: 14px; font-weight: 600; color: var(--cyan);
+      text-decoration: none;
+      background: rgba(46,230,214,.10); border: 1px solid rgba(46,230,214,.30);
+      padding: 8px 16px; border-radius: 99px;
+      transition: background .15s;
+    }
+    .back:hover { background: rgba(46,230,214,.18); }
+    .progress-label { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+
+    main {
+      width: 100%; max-width: 560px;
+      flex: 1; display: flex; flex-direction: column;
+      justify-content: center; padding: 0 22px 30px;
+      gap: 16px;
+    }
+
+    .card-area {
+      background: linear-gradient(180deg, var(--card-2), var(--card));
+      border-radius: 24px;
+      padding: 40px 26px 36px;
+      text-align: center;
+      box-shadow: 0 18px 40px rgba(0,0,0,.35);
+      min-height: 220px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+    .hindi {
+      font-family: 'Noto Sans Devanagari', sans-serif;
+      font-size: clamp(48px, 14vw, 72px);
+      line-height: 1.1;
+    }
+    .reveal-hint { font-size: 13px; color: var(--ink-dim); margin-top: 8px; }
+    .answer { display: none; flex-direction: column; align-items: center; gap: 4px; }
+    .answer.show { display: flex; }
+    .roman { font-size: 22px; color: var(--marigold); font-style: italic; }
+    .english { font-size: 20px; color: var(--ink); }
+
+    .listen-btn {
+      border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
+      background: rgba(46,230,214,.15); color: var(--cyan);
+      border: 1px solid rgba(46,230,214,.3);
+      padding: 7px 16px; border-radius: 99px;
+      transition: background .12s;
+    }
+    .listen-btn:hover { background: rgba(46,230,214,.25); }
+
+    .ratings {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      display: none;
+    }
+    .ratings.show { display: grid; }
+    .rate-btn {
+      border: none; cursor: pointer; font-family: inherit;
+      font-size: 15px; font-weight: 600; color: #fff;
+      padding: 14px 0; border-radius: 14px;
+      transition: transform .06s, filter .1s;
+    }
+    .rate-btn:active { transform: scale(.95); }
+    .rate-btn.again  { background: var(--vermillion); }
+    .rate-btn.hard   { background: #5a5070; }
+    .rate-btn.good   { background: #2a6496; }
+    .rate-btn.easy   { background: var(--marigold); }
+
+    .progress { width: 100%; max-width: 560px; padding: 0 22px 28px; }
+    .ptrack { height: 8px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .pfill  { height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--cyan), var(--marigold)); transition: width .4s ease; }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="back" href="index.html">← Back to Ghar</a>
+  <span class="progress-label" id="prog-label">0 / 8 seen</span>
+</header>
+
+<main>
+  <div class="card-area" id="card" onclick="revealCard()">
+    <div class="hindi" id="hindi-word"></div>
+    <button class="listen-btn" onclick="event.stopPropagation(); speakCurrent()">🔊 Listen</button>
+    <div class="answer" id="answer">
+      <div class="roman" id="roman-word"></div>
+      <div class="english" id="english-word"></div>
+    </div>
+    <div class="reveal-hint" id="hint">Tap the card to reveal</div>
+  </div>
+
+  <div class="ratings" id="ratings">
+    <button class="rate-btn again" onclick="rate('again')">Again</button>
+    <button class="rate-btn hard"  onclick="rate('hard')">Hard</button>
+    <button class="rate-btn good"  onclick="rate('good')">Good</button>
+    <button class="rate-btn easy"  onclick="rate('easy')">Easy</button>
+  </div>
+</main>
+
+<div class="progress">
+  <div class="ptrack"><div class="pfill" id="pfill"></div></div>
+</div>
+
+<script>
+const DECK = [
+  { id:1, hindi:"नमस्ते",   roman:"namaste",    english:"hello / greetings" },
+  { id:2, hindi:"धन्यवाद",  roman:"dhanyavaad", english:"thank you" },
+  { id:3, hindi:"पानी",     roman:"paani",      english:"water" },
+  { id:4, hindi:"किताब",    roman:"kitaab",     english:"book" },
+  { id:5, hindi:"दोस्त",    roman:"dost",       english:"friend" },
+  { id:6, hindi:"खाना",     roman:"khaana",     english:"food" },
+  { id:7, hindi:"घर",       roman:"ghar",       english:"home" },
+  { id:8, hindi:"प्यार",    roman:"pyaar",      english:"love" },
+];
+
+DECK.forEach(c => { c.reps = 0; c.ease = 2.5; c.interval = 0; });
+
+let index = 0;
+
+function current() { return DECK[index]; }
+
+function revealCard() {
+  document.getElementById('answer').classList.add('show');
+  document.getElementById('hint').style.display = 'none';
+  document.getElementById('ratings').classList.add('show');
+  document.getElementById('card').style.cursor = 'default';
+  document.getElementById('card').onclick = null;
+}
+
+function rate(r) {
+  const c = current();
+  if (c.reps === 0) c.reps = 1; // mark seen
+
+  switch (r) {
+    case 'again': c.ease = Math.max(1.3, c.ease - 0.2); c.interval = 0; c.reps = 0; break;
+    case 'hard':  c.ease = Math.max(1.3, c.ease - 0.15); c.interval = Math.max(1, Math.round(c.interval * 1.2)); c.reps++; break;
+    case 'good':  c.interval = c.reps <= 1 ? 1 : Math.round(c.interval * c.ease) || 1; c.reps++; break;
+    case 'easy':  c.ease += 0.15; c.interval = Math.round((c.interval || 1) * c.ease * 1.3); c.reps++; break;
+  }
+
+  index = (index + 1) % DECK.length;
+  showCard();
+}
+
+function showCard() {
+  const c = current();
+  document.getElementById('hindi-word').textContent = c.hindi;
+  document.getElementById('roman-word').textContent = c.roman;
+  document.getElementById('english-word').textContent = c.english;
+  document.getElementById('answer').classList.remove('show');
+  document.getElementById('hint').style.display = '';
+  document.getElementById('ratings').classList.remove('show');
+  document.getElementById('card').style.cursor = 'pointer';
+  document.getElementById('card').onclick = revealCard;
+
+  const seen = DECK.filter(c => c.reps > 0).length;
+  document.getElementById('prog-label').textContent = seen + ' / ' + DECK.length + ' seen';
+  document.getElementById('pfill').style.width = (seen / DECK.length * 100) + '%';
+}
+
+let hiVoice = null;
+function loadVoices() {
+  const vs = speechSynthesis.getVoices();
+  hiVoice = vs.find(v => v.lang === 'hi-IN') || vs.find(v => v.lang.startsWith('hi')) || null;
+}
+if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = loadVoices; loadVoices(); }
+
+function speakCurrent() {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(current().hindi);
+  u.lang = 'hi-IN'; if (hiVoice) u.voice = hiVoice; u.rate = 0.85;
+  speechSynthesis.speak(u);
+}
+
+showCard();
+</script>
+</body>
+</html>
